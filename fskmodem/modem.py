@@ -53,6 +53,7 @@ import time
 import random
 import atexit
 import shutil
+import signal
 import threading
 import subprocess
 from subprocess import PIPE, CalledProcessError, SubprocessError
@@ -171,26 +172,27 @@ class FSKBase:
     def stop(self):
         '''Stop minimodem subprocess.'''
         self.online = False
-        # try to terminate normally
-        self._process.terminate()
+        # wait for loops to finish
+        time.sleep(0.5)
+        # sent ctrl+C interrupt to minimodem process
+        self._process.send_signal(signal.SIGINT)
+
+        try:
+            self._process.wait(timeout=5)
+        except subprocess.TimeoutExpired:
+            # process did not terminate from SIGINT, send SIGTERM
+            self._process.terminate()
+            
+            try:
+                self._process.wait(timeout=5)
+            except subprocess.TimeoutExpired:
+                # process did not terminate from SIGTERM, send SIGKILL
+                self._process.kill()
+                
         # use a thread to communicate non-blocking-ly
         comm_thread = threading.Thread(target=self._process.communicate)
         comm_thread.daemon = True
         comm_thread.start()
-        
-        comm_start = time.time()
-        comm_timeout = 5
-        # manual timeout
-        while time.time() < comm_start + comm_timeout:
-            time.sleep(1)
-
-        if self._process.poll() == None:
-            # if the process still hasn't stopped, try to kill it
-            self._process.kill()
-            # use a thread to communicate non-blocking-ly
-            comm_thread = threading.Thread(target=self._process.communicate)
-            comm_thread.daemon = True
-            comm_thread.start()
 
 
 class FSKReceive(FSKBase):
