@@ -234,6 +234,8 @@ class FSKReceive(FSKBase):
             if read_io:
                 return self._process.stdout.read(size)
 
+        return b''
+
     def get_stderr(self, size=1):
         '''Get stderr data from minimodem subprocess.
 
@@ -250,6 +252,8 @@ class FSKReceive(FSKBase):
             read_io, _, _  = select.select(reads, [], [], 1.0) # 1 sec timeout
             if read_io:
                 return self._process.stderr.read(size)
+
+        return b''
 
 
 class FSKTransmit(FSKBase):
