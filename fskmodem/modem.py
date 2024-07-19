@@ -173,8 +173,8 @@ class FSKBase:
     def stop(self):
         '''Stop minimodem subprocess.'''
         self.online = False
-        # wait for loops to finish
-        time.sleep(0.5)
+        # wait for loops and blocking processes to finish
+        time.sleep(2)
         # sent ctrl+C interrupt to minimodem process
         self._process.send_signal(signal.SIGINT)
 
