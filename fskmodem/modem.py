@@ -283,7 +283,7 @@ class Modem:
         alsa_out (str): ALSA audio output device formated as 'card,device' (ex. '2,0')
         baudmode (str or int): Baudmode of the modem (see package docs or *minimodem* docs for more details), defaults to 300
         baudrate (int): Baudrate of the modem, determined by *baudmode*
-        sync_byte (str): Suppress rx carrier detection until the specified byte is received, defaults to '0x23' (utf-8 '#')
+        sync_byte (str): Suppress rx carrier detection until the specified byte is received, defaults to None
         confidence (float): Minimum confidence threshold based on SNR (i.e. squelch), defaults to 1.5
         MTU (int): Maximum size of packet to be transmitted or received, defaults to 500 (see Reticulum Network Stack MTU)
         online (bool): True if modem subprocesses are running, False otherwise
@@ -392,7 +392,7 @@ class Modem:
         self.alsa_in = alsa_in
         self.alsa_out = alsa_out
         self.baudmode = str(baudmode)
-        self.sync_byte = sync_byte
+        self.sync_byte = sync_byte # reference: 0x23 = utf-8 '#'
         self.confidence = confidence
         self.mark = mark
         self.space = space
