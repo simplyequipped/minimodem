@@ -146,7 +146,7 @@ if __name__ == '__main__':
     parser.add_argument('--mark', help='Mark frequency in Hz', type=int, metavar='FREQ')
     parser.add_argument('--space', help='Space frequency in Hz', type=int, metavar='FREQ')
     parser.add_argument('--eom', help='stdin end-of-message string, defaults to \'\\n\\n\' (not used with *--rns*)', default='\n\n')
-    parser.add_argument('--rns', help='Use RNS PipeInterface framing', action='store_true')
+    parser.add_argument('--rns', help='Use HDLC framing for RNS PipeInterface', action='store_true')
     parser.add_argument('--quiet', help='Do not print messages on start', action='store_true')
     parser.add_argument('--qdx', help='Utilize qdxcat for PTT control of QRPLabs QDX radio, optionally followed by QDX frequency in Hz', nargs='?', default=False, const=True, metavar='[FREQ]')
     args = parser.parse_args()
