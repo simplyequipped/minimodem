@@ -1,6 +1,6 @@
 # MIT License
 # 
-# Copyright (c) 2022-2023 Simply Equipped
+# Copyright (c) 2022-2024 Simply Equipped
 # 
 # Permission is hereby granted, free of charge, to any person obtaining a copy
 # of this software and associated documentation files (the "Software"), to deal
@@ -285,9 +285,10 @@ class Modem:
         baudrate (int): Baudrate of the modem, determined by *baudmode*
         sync_byte (str): Suppress rx carrier detection until the specified byte is received, defaults to '0x23' (utf-8 '#')
         confidence (float): Minimum confidence threshold based on SNR (i.e. squelch), defaults to 1.5
-        MTU (int): Maximum size of packet to be transmitted or received (default: 500, see Reticulum Network Stack)
+        MTU (int): Maximum size of packet to be transmitted or received, defaults to 500 (see Reticulum Network Stack MTU)
         online (bool): True if modem subprocesses are running, False otherwise
         carrier_sense (bool): True if incoming carrier detected, False otherwise
+        ptt_tail_duration (float): Number of seconds to hold PTT at the end of a packet transmission, defaults to 0.5
         BAUDMODES (dict): Map of *minimodem* baudmodes to baudrates
     '''
 
@@ -398,6 +399,7 @@ class Modem:
         self.MTU = 500
         self.online = False
         self.carrier_sense = False
+        self.ptt_tail_duration = 0.5 # seconds
         self._debug = False
         self._rx_callback = None
         self._rx_callback_bytes = None
@@ -405,6 +407,7 @@ class Modem:
         self._rx_confidence = 0
         self._rx_confidence_timestamp = 0
         self._tx_buffer = []
+        self._tx_buffer_lock = threading.Lock()
         self._rx = None
         self._tx = None
 
@@ -416,6 +419,10 @@ class Modem:
             self.baudrate = Modem.BAUDMODES[self.baudmode]
         else:
             raise ValueError('Unable to determine baudrate from baudmode: {}'.format(self.baudmode))
+
+        # set inter-packet delay, scaled based on baud rate
+        # base inter-packet delay: 100 ms at 300 baud
+        self.interpacket_delay = 100 * (300 / self.baudrate)
 
         # configure exit handler
         atexit.register(self.stop)
@@ -533,7 +540,9 @@ class Modem:
             raise TypeError( 'Data must be of type bytes, {} given'.format( type(data) ) )
 
         data = HDLC.START + data + HDLC.STOP
-        self._tx_buffer.append(data)
+
+        with self._tx_buffer_lock:
+            self._tx_buffer.append(data)
 
     def _toggle_ptt(self):
         '''Toggle radio PTT via callback function.'''
@@ -649,61 +658,62 @@ class Modem:
                 self._rx_confidence_timestamp = 0
 
             # simmer down
-            time.sleep(0.001)
+            time.sleep(0.001) # 1 ms
 
     def _tx_loop(self):
         '''Process data in the transmit buffer.'''
         while self.online:
-            time.sleep(0.01) # 10 ms
+            time.sleep(0.001) # 1 ms
             
             if self.carrier_sense:
                 continue
 
             # process transmit buffer
             if len(self._tx_buffer) > 0:
-                # random delay (100 - 250 ms) before transmitting to avoid collisions
-                time.sleep(random.uniform(0.10, 0.25))
                 
-                if self.carrier_sense:
-                    continue
-
                 # track bytes sent and start time
                 tx_bit_count = 0
                 tx_start_timestamp = time.time()
-                self._toggle_ptt()
-                time.sleep(0.1) # 100 ms
-                
-                while len(self._tx_buffer) > 0:
+
+                with self._tx_buffer_lock:
                     data = self._tx_buffer.pop(0)
 
-                    if self._debug:
-                        print('TX: ' + data.decode('utf-8'))
+                # toggle ptt on
+                self._toggle_ptt()
+                #TODO test delay after ptt to check for clipping
+                time.sleep(0.010) # 10 ms
+                
+                self._tx.send(data)
+                tx_bit_count += len(data) * 8
 
-                    self._tx.send(data)
-                    tx_bit_count += len(data) * 8
+                if self._debug:
+                    print('TX: ' + data.decode('utf-8'))
+
 
                 # calculate duration of transmission based on number of bits sent
                 if self.sync_byte is not None:
                     # minimodem adds 16 leading sync bytes, plus start and stop bytes for each sync byte
                     tx_bit_count += 16 * (8 + 2)
-
                 # bits sent / baudrate = transmit time in seconds
                 tx_duration = tx_bit_count / self.baudrate
-                # 1.3x mupltiplier necessary to align with actual transmit duration
+                #TODO 1.3x mupltiplier necessary to align with actual transmit duration
                 tx_duration *= 1.3
-                # 0.5 sec ptt tail
-                tx_duration += 0.5
+                tx_duration += self.ptt_tail_duration
 
                 tx_end_timestamp = tx_start_timestamp + tx_duration
                 
                 while time.time() < tx_end_timestamp:
-                    time.sleep(0.1) # 100 ms
+                    time.sleep(0.001) # 1 ms
                     
+                # toggle ptt off
                 self._toggle_ptt()
 
                 if self._debug:
                     duration = tx_end_timestamp - tx_start_timestamp
                     print('{} bits at {} bps     tx duration: {} s'.format(tx_bit_count, self.baudrate, tx_duration))
+
+                # interpacket delay for collision avoidance
+                time.sleep(self.interpacket_delay)
 
 
     def _stderr_loop(self):
@@ -758,6 +768,5 @@ class Modem:
                 if len(stderr_buffer) > 2 * len(carrier_event_symbol):
                     stderr_buffer = b''
 
-            # simmer down
-            time.sleep(0.001)
+            time.sleep(0.001) # 1 ms
             
