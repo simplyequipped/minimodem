@@ -54,8 +54,11 @@ class HDLC:
 
 
 def _write_stdout(data, confidence):
-    sys.stdout.write(data)
-    sys.stdout.flush()
+    try:
+        sys.stdout.write(data)
+        sys.stdout.flush()
+    except BrokenPipeError:
+        return
 
 def _read_stdin():
     global modem
@@ -79,9 +82,12 @@ def _read_stdin():
             data_buffer = ''
 
 def _rns_write_stdout(data, confidence):
-    data = bytes([HDLC.FLAG]) + HDLC.escape(data) + bytes([HDLC.FLAG])
-    sys.stdout.buffer.write(data)
-    sys.stdout.buffer.flush()
+    try:
+        data = bytes([HDLC.FLAG]) + HDLC.escape(data) + bytes([HDLC.FLAG])
+        sys.stdout.buffer.write(data)
+        sys.stdout.buffer.flush()
+    except BrokenPipeError:
+        return
 
 def _rns_read_stdin():
     global modem
@@ -101,6 +107,7 @@ def _rns_read_stdin():
 
         if in_frame and byte == HDLC.FLAG:
             in_frame = False
+
             modem.send_bytes(data_buffer)
 
         elif byte == HDLC.FLAG:
