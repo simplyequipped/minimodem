@@ -201,8 +201,9 @@ class FSKBase:
         comm_thread = threading.Thread(target=self._process.communicate)
         comm_thread.daemon = True
         comm_thread.start()
+        comm_thread.join()
         
-        print('{}: proc.communicate finished'.format(self.mode))
+        print('{}: proc.communicate thread joined'.format(self.mode))
 
 
 class FSKReceive(FSKBase):
