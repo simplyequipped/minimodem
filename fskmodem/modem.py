@@ -177,23 +177,32 @@ class FSKBase:
         time.sleep(2)
         # sent ctrl+C interrupt to minimodem process
         self._process.send_signal(signal.SIGINT)
+        print('{}: sent SIGINT'.format(self.mode))
 
         try:
             self._process.wait(timeout=5)
         except subprocess.TimeoutExpired:
+            if self._process.poll() is None:
+                print('{}: SIGINT failed'.format(self.mode))
             # process did not terminate from SIGINT, send SIGTERM
             self._process.terminate()
+            print('{}: sent SIGTERM'.format(self.mode))
             
             try:
                 self._process.wait(timeout=5)
             except subprocess.TimeoutExpired:
+                if self._process.poll() is None:
+                    print('{}: SIGTERM failed'.format(self.mode))
                 # process did not terminate from SIGTERM, send SIGKILL
                 self._process.kill()
+                print('{}: sent SIGKILL'.format(self.mode))
                 
         # use a thread to communicate non-blocking-ly
         comm_thread = threading.Thread(target=self._process.communicate)
         comm_thread.daemon = True
         comm_thread.start()
+        
+        print('{}: proc.communicate finished'.format(self.mode))
 
 
 class FSKReceive(FSKBase):
